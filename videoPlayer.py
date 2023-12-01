@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import filedialog
 import pygame
 
+
 class VideoPlayer:
     def __init__(self, master):
         self.master = master
@@ -33,6 +34,14 @@ class VideoPlayer:
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             self.update_canvas()
 
+            if self.audio_path:
+                pygame.mixer.music.stop()  # Stop the current playback
+                pygame.mixer.music.load(self.audio_path)  # Reload the audio file
+                pygame.mixer.music.play()  # Start playing the audio from the beginning
+
+                if not self.is_playing:
+                    pygame.mixer.music.pause()  # Pause the audio if the video is paused
+
     def play_video(self):
         if not pygame.mixer.get_init():
             pygame.mixer.init()
@@ -45,17 +54,27 @@ class VideoPlayer:
         pygame.mixer.music.pause()
 
     def open_video(self):
-        video_path = filedialog.askopenfilename(filetypes=[("Video files", "*.mp4;*.avi;*.mkv")])
-        if video_path:
-            self.cap = cv2.VideoCapture(video_path)
-            self.width = int(self.cap.get(3))
-            self.height = int(self.cap.get(4))
-            self.audio_path = ""  # Reset the audio path when a new video is opened
-            self.update_canvas()
+        try:
+            video_path = filedialog.askopenfilename(title="Select Video", filetypes=[
+                ("All files", "*.*")])  # Allow all file types for testing
+            if video_path:
+                self.cap = cv2.VideoCapture(video_path)
+                if not self.cap.isOpened():  # Check if the video capture is successfully opened
+                    raise IOError("Cannot open video file")
+                self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                self.audio_path = ""  # Reset the audio path when a new video is opened
+                self.update_canvas()
 
-            audio_path = filedialog.askopenfilename(filetypes=[("Audio files", "*.wav")])
-            if audio_path:
-                self.audio_path = audio_path
+                # Optional: Ask for audio file only if the video is successfully opened
+                audio_path = filedialog.askopenfilename(title="Select Audio",
+                                                        filetypes=[("Audio files", "*.wav"), ("All files", "*.*")])
+                if audio_path:
+                    self.audio_path = audio_path
+
+        except Exception as e:
+            print(f"Error opening video: {e}")
+            # Optionally, you can show an error message on the GUI
 
     def play_audio(self):
         if not pygame.mixer.get_init():
@@ -68,7 +87,7 @@ class VideoPlayer:
         if self.cap:
             ret, frame = self.cap.read()
             if ret:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Insert this line here
                 img = tk.PhotoImage(data=self.convert_frame(frame))
                 self.canvas.config(width=self.width, height=self.height)
                 self.canvas.img_tk = img
