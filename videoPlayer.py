@@ -87,7 +87,9 @@ class VideoPlayer:
         if self.cap:
             ret, frame = self.cap.read()
             if ret:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Insert this line here
+                # 确保从BGR转换到RGB
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
                 img = tk.PhotoImage(data=self.convert_frame(frame))
                 self.canvas.config(width=self.width, height=self.height)
                 self.canvas.img_tk = img
