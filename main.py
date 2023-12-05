@@ -1,21 +1,12 @@
-import cv2
-from videoPlayer import VideoPlayer
+# main.py
+
 import tkinter as tk
+from VideoPlayer import VideoPlayer
 
-# Provide the paths to your video and audio files
-default_video_path = "videos/video2.mp4"
-default_audio_path = "audios/video2.wav"
+def main():
+    root = tk.Tk()
+    player = VideoPlayer(root, "Video Player", "Videos/video2.mp4", "audios/video2.wav")
+    root.mainloop()
 
-# Create the main window
-root = tk.Tk()
-
-# Create the VideoPlayer instance with the specified video and audio paths
-player = VideoPlayer(root)
-player.cap = cv2.VideoCapture(default_video_path)
-player.width = int(player.cap.get(3))
-player.height = int(player.cap.get(4))
-player.audio_path = default_audio_path
-player.update_canvas()  # Update canvas with the initial frame
-
-# Run the application
-player.run()
+if __name__ == "__main__":
+    main()
