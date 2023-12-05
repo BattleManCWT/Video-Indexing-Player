@@ -1,166 +1,99 @@
-import json
-import numpy as np
 import cv2
-from scipy.spatial import distance
+import numpy as np
+from pathlib import Path
+from typing import Optional, Tuple, Dict, List
 
-def downsample_frame(frame, scale_percent):
-    """Reduce the size of the frame to the specified percentage."""
-    width = int(frame.shape[1] * scale_percent / 100)
-    height = int(frame.shape[0] * scale_percent / 100)
-    dimensions = (width, height)
+def downsample_frame(frame: np.ndarray, scale_percent: float) -> np.ndarray:
+    """
+    Downsample a frame by a specified scale percentage.
+
+    :param frame: The frame to downsample.
+    :param scale_percent: The percentage to scale down by.
+    :return: Downsampled frame.
+    """
+    scale = scale_percent / 100
+    dimensions = (int(frame.shape[1] * scale), int(frame.shape[0] * scale))
     return cv2.resize(frame, dimensions, interpolation=cv2.INTER_AREA)
 
-def calculate_histogram(frame):
-    """Calculate a normalized color histogram for the given frame."""
+def calculate_histogram(frame: np.ndarray, bins_per_channel: Tuple[int, int, int] = (8, 8, 8)) -> np.ndarray:
+    """
+    Calculate the color histogram for a given frame.
+
+    :param frame: The frame to calculate the histogram for.
+    :param bins_per_channel: The number of bins per channel.
+    :return: The flattened histogram.
+    """
     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    hist = cv2.calcHist([hsv_frame], [0, 1, 2], None, [8, 8, 8],
-                        [0, 180, 0, 256, 0, 256])
+    hist = cv2.calcHist([hsv_frame], [0, 1, 2], None, bins_per_channel, [0, 180, 0, 256, 0, 256])
     return cv2.normalize(hist, hist).flatten()
 
-def calculate_motion(previous_frame, current_frame):
-    """Calculate the magnitude of motion between two frames using optical flow."""
-    flow = cv2.calcOpticalFlowFarneback(
-        previous_frame, current_frame, None, 0.5, 3, 15, 3, 5, 1.2, 0
-    )
-    magnitude, _ = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-    return np.sum(magnitude)
+def process_shot(current_shot_histograms: np.ndarray) -> np.ndarray:
+    """
+    Compute the average histogram of the current shot.
 
-def calculate_optical_flows(frames):
-    """Calculate motion magnitudes using optical flows between a list of frames."""
-    motion_magnitudes = []
-    prev_frame_gray = cv2.cvtColor(frames[0], cv2.COLOR_BGR2GRAY)
+    :param current_shot_histograms: Array of histograms for the current shot.
+    :return: Average histogram.
+    """
+    if current_shot_histograms.size == 0:
+        return np.zeros(8 * 8 * 8)
+    return np.mean(current_shot_histograms, axis=0)
 
-    for frame in frames[1:]:
-        next_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        flow = cv2.calcOpticalFlowFarneback(
-            prev_frame_gray, next_frame_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0
-        )
-        magnitude, _ = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-        motion_magnitudes.append(np.mean(magnitude))
-        prev_frame_gray = next_frame_gray
+def detect_shot_histogram(video_path: str, downsample_percent: float) -> Optional[np.ndarray]:
+    """
+    Detect and compute the average histogram for shots in a video.
 
-    return motion_magnitudes
-
-def process_shot(shot_frames, current_shot_histograms):
-    """Process the accumulated frames of a shot to calculate histogram & motion."""
-    if current_shot_histograms:
-        avg_hist = np.mean(np.array(current_shot_histograms), axis=0).tolist()
-    else:
-        avg_hist = [0] * (8 * 8 * 8)
-
-    motion_scores = calculate_optical_flows(shot_frames)
-    if motion_scores:
-        motion_score = np.mean(motion_scores).tolist()
-    else:
-        motion_score = 0
-
-    return avg_hist, motion_score
-
-def detect_shot_boundaries(video_path, color_threshold, motion_threshold,
-                           downsample_percent):
-    """Detect shot boundaries in a video and return their signatures."""
+    :param video_path: Path to the video file.
+    :param downsample_percent: Percentage to downsample each frame for processing.
+    :return: The average histogram of the video or None if the video can't be read.
+    """
     cap = cv2.VideoCapture(video_path)
     ret, frame = cap.read()
     if not ret:
-        print("Error: Can't read video file.")
-        return [], []
+        print(f"Error: Can't read video file {video_path}.")
+        return None
 
-    previous_frame = downsample_frame(frame, downsample_percent)
-    previous_frame_gray = cv2.cvtColor(previous_frame, cv2.COLOR_BGR2GRAY)
-    previous_hist = calculate_histogram(previous_frame)
-    shot_boundaries, histograms, motion_scores = [], [], []
-    shot_frames, current_shot_histograms = [], []
-    current_shot_start = 0
+    current_shot_histograms = []
 
     while True:
         ret, frame = cap.read()
         if not ret:
-            if current_shot_start < int(cap.get(cv2.CAP_PROP_POS_FRAMES)):
-                avg_hist, motion_score = process_shot(shot_frames,
-                                                      current_shot_histograms)
-                histograms.append(avg_hist)
-                motion_scores.append(motion_score)
-                end_frame = int(cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
-                shot_boundaries.append((current_shot_start, end_frame))
             break
 
         frame_downsampled = downsample_frame(frame, downsample_percent)
-        shot_frames.append(frame_downsampled)
-        frame_gray = cv2.cvtColor(frame_downsampled, cv2.COLOR_BGR2GRAY)
         current_hist = calculate_histogram(frame_downsampled)
         current_shot_histograms.append(current_hist)
 
-        # hist_diff = cv2.compareHist(previous_hist, current_hist,
-        #                             cv2.HISTCMP_BHATTACHARYYA)
-        # motion_value = calculate_motion(previous_frame_gray, frame_gray)
-
-        # if hist_diff > color_threshold or motion_value > motion_threshold:
-        #     frame_number = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-        #     avg_hist, motion_score = process_shot(shot_frames,
-        #                                           current_shot_histograms)
-        #     histograms.append(avg_hist)
-        #     motion_scores.append(motion_score)
-        #     shot_boundaries.append((current_shot_start, frame_number - 1))
-        #     current_shot_start = frame_number
-        #     shot_frames, current_shot_histograms = [], []
-
-        # previous_frame_gray, previous_hist = frame_gray, current_hist
-
     cap.release()
-    return {"shotBoundaries": shot_boundaries, "histograms": histograms,
-            "motionScores": motion_scores}
 
-def compare_shot_signatures(query_signature, db_signatures):
-    """Compare shot signatures to find the most similar shots."""
-    shot_similarity_scores = []
+    return process_shot(np.array(current_shot_histograms))
 
-    # Iterate through each shot in the query video
-    for q_shot_boundary, q_hist, q_motion in zip(
-            query_signature['shotBoundaries'],
-            query_signature['histograms'],
-            query_signature['motionScores']
-        ):
-        best_match_score = float('inf')
-        best_match_video = None
-        best_match_shot = None
+def compare_video_signatures(query_histogram: np.ndarray, db_signatures: Dict[str, Dict[str, List[np.ndarray]]]) -> Tuple[str, float]:
+    """
+    Compare a query histogram against a database of video signatures.
 
-        # Iterate through each video in the database
-        for video_path, video_signature in db_signatures.items():
-            # Iterate through each shot in the current database video
-            for db_shot_boundary, db_hist, db_motion in zip(
-                    video_signature['shotBoundaries'],
-                    video_signature['histograms'],
-                    video_signature['motionScores']
-                ):
-                # Calculate the similarity score for the current shot
-                score = distance.euclidean(q_hist, db_hist) + abs(q_motion - db_motion)
+    :param query_histogram: The histogram of the query video.
+    :param db_signatures: Database of video signatures.
+    :return: Path of the closest video and the similarity score.
+    """
+    closest_video = None
+    min_distance = float('inf')
 
-                # Update the best match if the current score is lower
-                if score < best_match_score:
-                    best_match_score = score
-                    best_match_video = video_path
-                    best_match_shot = db_shot_boundary
+    for video_path, signature in db_signatures.items():
+        for video_histogram in signature['histograms']:
+            distance = cv2.compareHist(query_histogram, video_histogram, cv2.HISTCMP_CHISQR)
+            if distance < min_distance:
+                min_distance = distance
+                closest_video = video_path
 
-        # Append the best match for the current query shot
-        shot_similarity_scores.append({
-            "query_shot": q_shot_boundary,
-            "best_match_video": best_match_video,
-            "best_match_shot": best_match_shot,
-            "score": best_match_score
-        })
+    return closest_video, min_distance
 
-    # Return the list of best matches for each shot in the query video
-    return shot_similarity_scores
+def frame_to_time(frame_number: int, fps: int = 30) -> str:
+    """
+    Convert a frame number to a timestamp.
 
-def frame_to_time(frame_number, fps=30):
-    """Convert a frame number to a timestamp in a video.
-
-    Args:
-    frame_number (int): The frame number to convert.
-    fps (int, optional): The frames per second of the video. Defaults to 30.
-
-    Returns:
-    str: A timestamp in the format 'HH:MM:SS'.
+    :param frame_number: The frame number.
+    :param fps: Frames per second of the video.
+    :return: Timestamp string in 'HH:MM:SS' format.
     """
     total_seconds = frame_number / fps
     hours = int(total_seconds // 3600)
@@ -168,23 +101,22 @@ def frame_to_time(frame_number, fps=30):
     seconds = int(total_seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-# Example usage:
-color_threshold = 0.5
-motion_threshold = 1.5e5
-downsample_percent = 50
+def main():
+    # query_path = "Data/Queries"
+    query_video_path = "Data/Queries/video9_1.mp4"
+    downsample_percent = 50
+    db_signatures = np.load('dbsignatures.npy', allow_pickle=True).item()
 
-query_path = "Data/Queries/video1_1.mp4"
-query_signature = detect_shot_boundaries(query_path, color_threshold,
-                                         motion_threshold, downsample_percent)
+    # for video_path in Path(query_path).glob('*.mp4'):
+    #     query_histogram = detect_shot_histogram(str(video_path), downsample_percent)
+    #     if query_histogram is not None:
+    #         closest_video, similarity_score = compare_video_signatures(query_histogram, db_signatures)
+    #         print(f"The most similar video to {video_path.name} is {Path(closest_video).name} with a similarity score of {similarity_score}")
 
-with open('signatures.json') as f:
-    data = json.load(f)
+    query_histogram = detect_shot_histogram(query_video_path, downsample_percent)
+    closest_video, similarity_score = compare_video_signatures(query_histogram, db_signatures)
+    print(f"The most similar video to {query_video_path} is {Path(closest_video).name} with a similarity score of {similarity_score}")
 
-# best_match, score = compare_shot_signatures(query_signature, data)
-# print(f"The best match is {best_match} with a score of {score}")
 
-shot_similarities = compare_shot_signatures(query_signature, data)
-for shot_match in shot_similarities:
-    query_shot = [frame_to_time(shot_match['query_shot'][0]), frame_to_time(shot_match['query_shot'][1])]
-    match_shot = [frame_to_time(shot_match['best_match_shot'][0]), frame_to_time(shot_match['best_match_shot'][1])]
-    print(f"Query shot: {query_shot} matches with shot: {match_shot} in video: {shot_match['best_match_video']} with a score of {shot_match['score']}")
+if __name__ == "__main__":
+    main()
