@@ -103,10 +103,14 @@ def frame_to_time(frame_number: int, fps: int = 30) -> str:
     seconds = int(total_seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-def find_offset(within_file, find_file):
-    y_within, sr_within = librosa.load(within_file, sr=None)
-    y_find, _ = librosa.load(find_file, sr=sr_within)
+def find_offset(within_file, find_file, downsample_rate=22050, y_find_duration=None):
+    # Load with a lower sample rate to reduce data size
+    y_within, sr_within = librosa.load(within_file, sr=downsample_rate)
 
+    # Load y_find with the same sample rate, and optionally only a portion of it
+    y_find, _ = librosa.load(find_file, sr=downsample_rate, duration=y_find_duration)
+
+    # Perform cross-correlation
     c = signal.correlate(y_within, y_find, mode='valid', method='fft')
     peak = np.argmax(c)
     offset = round(peak / sr_within, 2)
