@@ -77,12 +77,18 @@ def create_database_signatures(video_path: str, color_threshold: float, downsamp
             current_shot_histograms = []
 
         previous_hist = current_hist
+    
+    if(current_shot_histograms):
+        frame_number = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+        avg_hist = process_shot(np.array(current_shot_histograms))
+        histograms.append(avg_hist)
+        shot_boundaries.append((frame_number, frame_number))
 
     cap.release()
     return np.array(shot_boundaries), np.array(histograms)
 
 def main():
-    color_threshold = 0.6
+    color_threshold = 0.5
     downsample_percent = 50
     signatures: Dict[str, Dict[str, np.ndarray]] = {}
     database_path = "Data/Videos"
