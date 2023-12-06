@@ -81,6 +81,9 @@ class VideoPlayer:
         pygame.mixer.music.stop()
         pygame.mixer.music.load(self.audio_file)  # Reload the audio to reset it
 
+    def get_frame_from_time(self, start_time_seconds):
+        return int(start_time_seconds * self.frame_rate)
+
     def play_from_frame(self, frame_num):
         if 0 <= frame_num < len(self.frames):
             self.current_frame = frame_num
@@ -91,5 +94,7 @@ class VideoPlayer:
 if __name__ == "__main__":
     root = tk.Tk()
     vp = VideoPlayer(root, 'Test_rgb/video2_1.rgb', 'Data/Queries/audios/video2_1.wav')
-    vp.play_from_frame(100)
+    start_time_seconds = 5  # Start time in seconds
+    frame_to_start = vp.get_frame_from_time(start_time_seconds)
+    vp.play_from_frame(frame_to_start)
     root.mainloop()
