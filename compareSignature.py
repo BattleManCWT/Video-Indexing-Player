@@ -1,7 +1,9 @@
 import cv2
 import numpy as np
 from pathlib import Path
+import librosa
 from typing import Optional, Tuple, Dict, List
+from scipy import signal
 
 def downsample_frame(frame: np.ndarray, scale_percent: float) -> np.ndarray:
     """
@@ -101,9 +103,21 @@ def frame_to_time(frame_number: int, fps: int = 30) -> str:
     seconds = int(total_seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
+def find_offset(within_file, find_file):
+    y_within, sr_within = librosa.load(within_file, sr=None)
+    y_find, _ = librosa.load(find_file, sr=sr_within)
+
+    c = signal.correlate(y_within, y_find, mode='valid', method='fft')
+    peak = np.argmax(c)
+    offset = round(peak / sr_within, 2)
+
+    return offset
+
 def main():
     # query_path = "Data/Queries"
     query_video_path = "Data/Queries/video9_1.mp4"
+    query_video_name = query_video_path.split("/")[-1][:-4]
+
     downsample_percent = 50
     db_signatures = np.load('dbsignatures.npy', allow_pickle=True).item()
 
@@ -116,7 +130,12 @@ def main():
     query_histogram = detect_shot_histogram(query_video_path, downsample_percent)
     closest_video, similarity_score = compare_video_signatures(query_histogram, db_signatures)
     print(f"The most similar video to {query_video_path} is {Path(closest_video).name} with a similarity score of {similarity_score}")
-
+    closest_video_name = closest_video.split("/")[-1][:-4]
+    offset = find_offset( f"Data/Audios/{closest_video_name}.wav", f"Data/Queries/audios/{query_video_name}.wav")
+    offset_minutes = offset // 60
+    offset_remainder_seconds = offset % 60
+    print(f"Offset: {offset}s" )
+    print(f"Offset: {int(offset_minutes)}m {round(offset_remainder_seconds, 2)}s")
 
 if __name__ == "__main__":
     main()
