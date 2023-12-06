@@ -1,26 +1,35 @@
-from moviepy.editor import VideoFileClip
+from moviepy.editor import VideoFileClip, AudioFileClip
 import random
 
-def generate_random_clips(video_path, number_of_clips=5, min_duration=10, max_duration=40):
-    # 读取视频
+def generate_random_clips(video_path, video_audio_file, number_of_clips=3, min_duration=5, max_duration=40):
+    # Load the video and its audio
     video = VideoFileClip(video_path)
-    duration = video.duration
+    audio = AudioFileClip(video_audio_file)
+    video_name = video_path.split("/")[-1][:4]
+    duration = min(video.duration, audio.duration)  # Ensure both video and audio have the same maximum duration
 
     clips = []
 
     for _ in range(number_of_clips):
-        # 随机选择开始时间
+        # Randomly select start time
         start = random.uniform(0, duration - max_duration)
-        # 随机选择片段时长
+        # Randomly select clip duration
         clip_duration = random.uniform(min_duration, max_duration)
         end = start + clip_duration
 
-        # 截取片段
-        clip = video.subclip(start, end)
-        clips.append(clip)
+        # Create video and audio subclips
+        video_clip = video.subclip(start, end)
+        audio_clip = audio.subclip(start, end)
 
-        # 导出片段
-        clip.write_videofile(f"clip_{start:.2f}_{end:.2f}.mp4")
+        # Set the audio of the video clip
+        video_clip = video_clip.set_audio(audio_clip)
 
-# 使用示例
-generate_random_clips("Data/Videos/video12.mp4")
+        clips.append(video_clip)
+
+        # Export the video and audio clips
+        output_filename = f"{video_name}_{start:.2f}_{end:.2f}"
+        video_clip.write_videofile(f"{output_filename}.mp4")
+        audio_clip.write_audiofile(f"{output_filename}.wav")
+
+# Example usage
+generate_random_clips("Data/Videos/video12.mp4", "Data/Audios/video3.wav")
