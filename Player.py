@@ -2,15 +2,20 @@ import tkinter as tk
 from PIL import Image, ImageTk
 import threading
 import pygame
+import numpy as np
+import os
 import wave
 
 class VideoPlayer:
-    def __init__(self, root, video_file, audio_file):
+    def __init__(self, root, video_file, audio_file, start_frame=0):
         self.root = root
         self.video_file = video_file
         self.audio_file = audio_file
-        self.frames = self.load_video(video_file)
-        self.current_frame = 0
+        self.width = 352  # Set the width of your video
+        self.height = 288  # Set the height of your video
+        self.frame_size = self.width * self.height * 3
+        self.frame_count = self.get_frame_count()
+        self.current_frame = start_frame
         self.playing = False
         self.paused = False
 
@@ -31,31 +36,36 @@ class VideoPlayer:
         pygame.mixer.init()
         self.audio_loaded = False
 
-        # Calculate frame rate
-        self.frame_rate = self.calculate_frame_rate()
+        # Display the initial frame
+        self.display_frame(start_frame)
 
-    def load_video(self, file_path):
-        frames = []
-        frame_size = 352 * 288 * 3  # 3 bytes per pixel for RGB
-        with open(file_path, 'rb') as f:
-            while True:
-                content = f.read(frame_size)
-                if not content:
-                    break
-                img = Image.frombytes('RGB', (352, 288), content)
-                frames.append(ImageTk.PhotoImage(img))
-        return frames
+    def get_frame_count(self):
+        file_size = os.path.getsize(self.video_file)
+        return file_size // self.frame_size
+
+    def read_frame(self, frame_num):
+        with open(self.video_file, 'rb') as f:
+            f.seek(frame_num * self.frame_size)
+            frame_data = np.frombuffer(f.read(self.frame_size), dtype=np.uint8)
+            frame_data = frame_data.reshape((self.height, self.width, 3))
+            return Image.fromarray(frame_data)
+
+    def display_frame(self, frame_num):
+        if 0 <= frame_num < self.frame_count:
+            frame_image = ImageTk.PhotoImage(self.read_frame(frame_num))
+            self.label.configure(image=frame_image)
+            self.label.image = frame_image  # Keep reference
 
     def calculate_frame_rate(self):
         with wave.open(self.audio_file, 'rb') as wav:
             length_in_seconds = wav.getnframes() / float(wav.getframerate())
-        return len(self.frames) / length_in_seconds
+        return self.frame_count / length_in_seconds
 
     def update_frame(self):
-        if self.playing and self.current_frame < len(self.frames):
-            self.label.configure(image=self.frames[self.current_frame])
+        if self.playing and self.current_frame < self.frame_count:
+            self.display_frame(self.current_frame)
             self.current_frame += 1
-            self.root.after(int(1000 / self.frame_rate), self.update_frame)
+            self.root.after(int(1000 / self.calculate_frame_rate()), self.update_frame)
 
     def play_video(self):
         if not self.playing:
@@ -63,9 +73,18 @@ class VideoPlayer:
             if not self.audio_loaded:
                 pygame.mixer.music.load(self.audio_file)
                 self.audio_loaded = True
-            pygame.mixer.music.play(start=self.current_frame / self.frame_rate)
+                audio_start_pos = self.current_frame / self.calculate_frame_rate()
+                pygame.mixer.music.play(start=audio_start_pos)
+            else:
+                if self.paused:
+                    pygame.mixer.music.unpause()  # Unpause if paused
+                else:
+                    audio_start_pos = self.current_frame / self.calculate_frame_rate()
+                    pygame.mixer.music.play(start=audio_start_pos)
+
             threading.Thread(target=self.update_frame).start()
         self.paused = False
+
 
     def pause_video(self):
         if self.playing:
@@ -77,24 +96,31 @@ class VideoPlayer:
         self.playing = False
         self.paused = False
         self.current_frame = 0
-        self.label.configure(image=self.frames[0])
+        self.display_frame(self.current_frame)
         pygame.mixer.music.stop()
         pygame.mixer.music.load(self.audio_file)  # Reload the audio to reset it
 
-    def get_frame_from_time(self, start_time_seconds):
-        return int(start_time_seconds * self.frame_rate)
-
     def play_from_frame(self, frame_num):
-        if 0 <= frame_num < len(self.frames):
+        if 0 <= frame_num < self.frame_count:
             self.current_frame = frame_num
-            self.play_video()
+            if self.playing:
+                self.pause_video()  # Pause if already playing
+
+            # Calculate the audio start position in seconds
+            audio_start_pos = self.current_frame / self.calculate_frame_rate()
+
+            if not self.audio_loaded:
+                pygame.mixer.music.load(self.audio_file)
+                self.audio_loaded = True
+
+            pygame.mixer.music.play(start=audio_start_pos)
+            threading.Thread(target=self.update_frame).start()
+            self.playing = True
+            self.paused = False
         else:
             print("Frame number out of range")
 
 if __name__ == "__main__":
     root = tk.Tk()
-    vp = VideoPlayer(root, 'Test_rgb/video2_1.rgb', 'Data/Queries/audios/video2_1.wav')
-    start_time_seconds = 5  # Start time in seconds
-    frame_to_start = vp.get_frame_from_time(start_time_seconds)
-    vp.play_from_frame(frame_to_start)
+    vp = VideoPlayer(root, 'path_to_video_file.rgb', 'path_to_audio_file.wav', start_frame=100)
     root.mainloop()

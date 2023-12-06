@@ -25,12 +25,11 @@ def main():
 
     # Calculate the specific frame
     approximate_location = calculate_frame_number(offset, 30)
-    frame_to_start = locate_exact_frame(f"Data/Queries/videos/video1_1.rgb", f"Test_rgb/video1.rgb", approximate_location, 5)
-    print(f"Start frame:{frame_to_start}")
+    frame_to_start = locate_exact_frame(f"Data/Queries/videos/{query_video_name}.rgb", f"Test_rgb/{closest_video_name}.rgb", approximate_location, 5)
+    print(f"Start frame: {frame_to_start}")
     # Initialize the video player
     root = tk.Tk()
-    player = VideoPlayer(root, f"Test_rgb/{closest_video_name}.rgb", f"Data/Audios/{closest_video_name}.wav")
-
+    player = VideoPlayer(root, f"Test_rgb/{closest_video_name}.rgb", f"Data/Audios/{closest_video_name}.wav", frame_to_start)
     player.play_from_frame(frame_to_start)
     player.pause_video()
     root.mainloop()
