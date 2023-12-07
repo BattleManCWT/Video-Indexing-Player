@@ -22,14 +22,27 @@ class VideoPlayer:
         self.label = tk.Label(root)
         self.label.pack()
 
-        play_button = tk.Button(root, text="Play", command=self.play_video)
-        play_button.pack()
+        button_frame = tk.Frame(root)
+        button_frame.pack()
 
-        pause_button = tk.Button(root, text="Pause", command=self.pause_video)
-        pause_button.pack()
+        play_button = tk.Button(button_frame, text="Play", command=self.play_video)
+        play_button.pack(side=tk.LEFT)
 
-        reset_button = tk.Button(root, text="Reset", command=self.reset_video)
-        reset_button.pack()
+        pause_button = tk.Button(button_frame, text="Pause", command=self.pause_video)
+        pause_button.pack(side=tk.LEFT)
+
+        reset_button = tk.Button(button_frame, text="Reset", command=self.reset_video)
+        reset_button.pack(side=tk.LEFT)
+
+        #
+        # play_button = tk.Button(root, text="Play", command=self.play_video)
+        # play_button.pack()
+        #
+        # pause_button = tk.Button(root, text="Pause", command=self.pause_video)
+        # pause_button.pack()
+        #
+        # reset_button = tk.Button(root, text="Reset", command=self.reset_video)
+        # reset_button.pack()
 
         # Initialize Pygame for audio
         pygame.init()

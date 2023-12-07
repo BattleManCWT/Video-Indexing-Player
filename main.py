@@ -3,7 +3,7 @@ import tkinter as tk
 import numpy as np
 from pathlib import Path
 from Player import VideoPlayer
-from compareSignature import detect_shot_histogram, compare_video_signatures, find_offset, calculate_frame_number
+from compareSignature import create_query_signature, compare_video_signatures, find_offset, calculate_frame_number
 from rgbCompare import locate_exact_frame
 
 def main():
@@ -11,9 +11,10 @@ def main():
     query_video_name = query_video_path.split("/")[-1][:-4]
 
     downsample_percent = 50
+    color_threshold = 0.5
     db_signatures = np.load('dbsignatures.npy', allow_pickle=True).item()
 
-    query_histogram = detect_shot_histogram(query_video_path, downsample_percent)
+    query_histogram = create_query_signature(query_video_path, color_threshold, downsample_percent)
     closest_video, similarity_score = compare_video_signatures(query_histogram, db_signatures)
     print(f"The most similar video to {query_video_path} is {Path(closest_video).name} with a similarity score of {similarity_score}")
     closest_video_name = closest_video.split("/")[-1][:-4]
@@ -29,6 +30,7 @@ def main():
     print(f"Start frame: {frame_to_start}")
     # Initialize the video player
     root = tk.Tk()
+    root.title(f"{closest_video_name}")
     player = VideoPlayer(root, f"Test_rgb/{closest_video_name}.rgb", f"Data/Audios/{closest_video_name}.wav", frame_to_start)
     player.play_from_frame(frame_to_start)
     player.pause_video()

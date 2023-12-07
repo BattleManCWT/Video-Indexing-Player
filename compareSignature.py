@@ -144,6 +144,15 @@ def find_offset(within_file, find_file, downsample_rate=22050, y_find_duration=N
 
     return offset
 
+def calculate_frame_number(offset_seconds: float, fps: int) -> int:
+    """
+    Calculate the frame number based on the offset time and FPS.
+    :param offset_seconds: Offset time in seconds.
+    :param fps: Frames per second of the video.
+    :return: Frame number corresponding to the offset time.
+    """
+    frame_number = int(offset_seconds * fps)
+    return frame_number
 
 def main():
     query_path = "Data/Queries/video9_1.mp4"
